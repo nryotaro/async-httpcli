@@ -1,4 +1,4 @@
-package org.nryotaro.nettysample
+package org.nryotaro.nettysample.sample2
 
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.*
@@ -10,7 +10,9 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.CharsetUtil
-import io.netty.util.ReferenceCountUtil
+import org.nryotaro.nettysample.HttpSnoopClientHandler
+import org.nryotaro.nettysample.HttpSnoopClientInitializer
+import org.nryotaro.nettysample.NettySample
 import java.net.URI
 
 
@@ -51,7 +53,7 @@ class NettySample {
 }
 
 class HttpSnoopClientInitializer(private val sslCtx: SslContext) : ChannelInitializer<SocketChannel>() {
-
+    
     override fun initChannel(ch: SocketChannel) {
         val p : ChannelPipeline = ch.pipeline()
         p.addLast(sslCtx.newHandler(ch.alloc()));
@@ -101,7 +103,7 @@ class HttpSnoopClientHandler: SimpleChannelInboundHandler<HttpObject>() {
         }
     }
 
-    override fun exceptionCaught(ctx: ChannelHandlerContext,  cause: Throwable) {
+    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         cause.printStackTrace();
         ctx.close();
     }
