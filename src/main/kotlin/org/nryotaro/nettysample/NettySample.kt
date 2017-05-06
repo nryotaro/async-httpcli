@@ -11,6 +11,8 @@ import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.CharsetUtil
 import io.netty.util.ReferenceCountUtil
+import io.netty.util.concurrent.GenericFutureListener
+import org.springframework.web.reactive.function.client.WebClient
 import java.net.URI
 
 
@@ -22,25 +24,35 @@ class NettySample {
         val port = 443
         val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
 
+        WebClient.create()
         val group = NioEventLoopGroup()
+        val b = Bootstrap()
         try {
-            val b = Bootstrap()
-            b.group(group).channel(NioSocketChannel::class.java).handler(HttpSnoopClientInitializer(sslCtx))
+            Thread.sleep(100L)
+            val c: Bootstrap = b.group(group).channel(NioSocketChannel::class.java)
+            while(true) {
+                c.handler(HttpSnoopClientInitializer(sslCtx))
 
-            // Make the connection attempt.
-            val ch: Channel = b.connect(host, port).sync().channel();
-            // Prepare the HTTP request.
-            val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
-            request.headers().set(HttpHeaderNames.HOST, host)
-            request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
-            request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
-            // Set some example cookies.
-            //request.headers().set(HttpHeaderNames.COOKIE, ClientCookieEncoder.STRICT.encode(DefaultCookie("my-cookie", "foo"), DefaultCookie("another-cookie", "bar")))
-            // Send the HTTP request.
-            ch.writeAndFlush(request)
+                // Make the connection attempt.
 
-            // Wait for the server to close the connection.
-            ch.closeFuture().sync()
+                val ch: Channel = b.connect(host, port).sync().channel()
+
+                // Prepare the HTTP request.
+                val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
+                request.headers().set(HttpHeaderNames.HOST, host)
+                request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+                request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
+                // Set some example cookies.
+                //request.headers().set(HttpHeaderNames.COOKIE, ClientCookieEncoder.STRICT.encode(DefaultCookie("my-cookie", "foo"), DefaultCookie("another-cookie", "bar")))
+                // Send the HTTP request.
+                ch.writeAndFlush(request)
+
+                // Wait for the server to close the connection.
+                ch.closeFuture().addListener {
+                    println("done")
+                }//.sync()
+            }
+
         } finally {
             // Shut down executor threads to exit.
             group.shutdownGracefully()
@@ -54,7 +66,9 @@ class HttpSnoopClientInitializer(private val sslCtx: SslContext) : ChannelInitia
 
     override fun initChannel(ch: SocketChannel) {
         val p : ChannelPipeline = ch.pipeline()
-        p.addLast(sslCtx.newHandler(ch.alloc()));
+
+        p.addLast(sslCtx.newHandler(ch.alloc()))
+
         p.addLast(HttpClientCodec());
         // Remove the following line if you don't want automatic content decompression.
         p.addLast(HttpContentDecompressor())

@@ -52,6 +52,22 @@ class NettySample {
 
 }
 
+class Client {
+
+    val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+    val group = NioEventLoopGroup()
+    val b = Bootstrap()
+
+    fun exec() {
+
+        try {
+
+        }finally {
+            group.shutdownGracefully()
+        }
+    }
+}
+
 class HttpSnoopClientInitializer(private val sslCtx: SslContext) : ChannelInitializer<SocketChannel>() {
     
     override fun initChannel(ch: SocketChannel) {
