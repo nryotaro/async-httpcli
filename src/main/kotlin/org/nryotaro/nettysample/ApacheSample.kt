@@ -43,14 +43,14 @@ class Client {
         cli.close()
     }
 
-    fun download(cb: Cb): Future<HttpResponse> {
+    fun download(cb: Cb): Future<Boolean> {
 
         val c: HttpAsyncRequestProducer = BasicAsyncRequestProducer(HttpHost("www.sec.gov"), HttpGet(cb.url))
         return cli.execute(c,A(cb.dest), cb)
     }
 }
 
-class A(dest: File): AsyncByteConsumer<HttpResponse>() {
+class A(dest: File): AsyncByteConsumer<Boolean>() {
 
     val ch = FileChannel.open(Paths.get(dest.toURI()),StandardOpenOption.WRITE)
     var response: HttpResponse? = null
@@ -64,9 +64,9 @@ class A(dest: File): AsyncByteConsumer<HttpResponse>() {
         ch.write(buf)
     }
 
-    override fun buildResult(p0: HttpContext?): HttpResponse? {
+    override fun buildResult(p0: HttpContext?): Boolean {
         println("build")
-        return response
+        return true
     }
 
     override fun releaseResources() {
@@ -76,10 +76,10 @@ class A(dest: File): AsyncByteConsumer<HttpResponse>() {
 
 }
 
-class Cb(val url: String, val dest: File, val latch: CountDownLatch): FutureCallback<HttpResponse> {
+class Cb(val url: String, val dest: File, val latch: CountDownLatch): FutureCallback<Boolean> {
 
-    override fun completed(response: HttpResponse) {
-
+    override fun completed(response: Boolean) {
+        /*
         if (dest.exists()) {
             dest.delete()
         } else {
@@ -92,6 +92,7 @@ class Cb(val url: String, val dest: File, val latch: CountDownLatch): FutureCall
                 it.copyTo(out)
             }
         }
+        */
         println("success: " + url)
         latch.countDown()
     }
