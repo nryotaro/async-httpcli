@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Future
+import java.util.function.Consumer
 
 class Client {
     val log = LoggerFactory.getLogger(Client::class.java)
@@ -38,42 +39,17 @@ class Client {
 
     fun download(url: String, dest: File): Pair<Future<HttpResponse>, Mono<HttpResponse>> {
         val c = Cb(url, dest)
-        Mono.create<String>{
-             object : FutureCallback<HttpResponse> {
-            override fun cancelled() {
-                log.error(url)
-                it.error(RuntimeException(url))
-            }
-            override fun completed(response: HttpResponse) {
+        val e = Mono.create(c)
 
-                if (dest.exists()) {
-                    dest.delete()
-                } else {
-                    dest.parentFile.mkdirs()
-                }
-                dest.createNewFile()
-
-                dest.outputStream().use { out ->
-                    response.entity.content.use { it ->
-                        it.copyTo(out)
-                    }
-                }
-                log.debug("success: " + url)
-                it.success(url)
-            }
-
-            override fun failed(e: Exception) {
-                log.error(url)
-                it.error(e)
-            }
-        })
-        }
-        cli.execute(HttpGet(url), c)
+        return Pair(cli.execute(HttpGet(url), c), e)
     }
 }
 
-class Cb(val url: String, val dest: File): FutureCallback<HttpResponse> {
+class Cb(val url: String, val dest: File): FutureCallback<HttpResponse>, Consumer<MonoSink<HttpResponse>> {
     var sink: MonoSink<HttpResponse>? = null
+    override fun accept(t: MonoSink<HttpResponse>) {
+        sink = t
+    }
 
     override fun completed(response: HttpResponse) {
 
@@ -89,6 +65,7 @@ class Cb(val url: String, val dest: File): FutureCallback<HttpResponse> {
                 it.copyTo(out)
             }
         }
+        println("success: " + url)
         sink?.success(response)
     }
 
@@ -112,9 +89,10 @@ class ApacheSample {
         val c = CountDownLatch(1)
         Flux.just(*File("/Users/nryotaro/hoge.txt")
                 .readLines()
-                .toTypedArray()).delayElements(Duration.ofMillis(100L)).map { url ->
+                .toTypedArray()).delayElements(Duration.ofMillis(100L)).map{ url ->
             cli.download("https://www.sec.gov" + url, File("/tmp/hoge" + url))
-        }.flatMap { it.second }.doOnNext {
+        }.flatMap { it.second }
+                .doOnNext {
             log.debug(it.toString())
         }.doOnTerminate {
             c.countDown()
