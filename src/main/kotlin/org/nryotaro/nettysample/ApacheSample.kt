@@ -1,5 +1,6 @@
 package org.nryotaro.nettysample
 
+import org.apache.http.HttpHost
 import org.apache.http.HttpResponse
 import org.apache.http.client.config.RequestConfig
 import org.apache.http.client.methods.HttpGet
@@ -9,6 +10,8 @@ import org.apache.http.impl.nio.client.HttpAsyncClients
 import org.apache.http.nio.IOControl
 import org.apache.http.nio.client.HttpAsyncClient
 import org.apache.http.nio.client.methods.AsyncByteConsumer
+import org.apache.http.nio.protocol.BasicAsyncRequestProducer
+import org.apache.http.nio.protocol.HttpAsyncRequestProducer
 import org.apache.http.protocol.HttpContext
 import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
@@ -18,6 +21,10 @@ import sun.misc.IOUtils
 import java.io.File
 import java.lang.Exception
 import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.OpenOption
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Future
@@ -36,20 +43,40 @@ class Client {
         cli.close()
     }
 
+    fun download(cb: Cb): Future<HttpResponse> {
 
-    fun download(url: String, dest: File): Pair<Future<HttpResponse>, Mono<HttpResponse>> {
-        val c = Cb(url, dest)
-        val e = Mono.create(c)
-
-        return Pair(cli.execute(HttpGet(url), c), e)
+        val c: HttpAsyncRequestProducer = BasicAsyncRequestProducer(HttpHost("www.sec.gov"), HttpGet(cb.url))
+        return cli.execute(c,A(cb.dest), cb)
     }
 }
 
-class Cb(val url: String, val dest: File): FutureCallback<HttpResponse>, Consumer<MonoSink<HttpResponse>> {
-    var sink: MonoSink<HttpResponse>? = null
-    override fun accept(t: MonoSink<HttpResponse>) {
-        sink = t
+class A(dest: File): AsyncByteConsumer<HttpResponse>() {
+
+    val ch = FileChannel.open(Paths.get(dest.toURI()),StandardOpenOption.WRITE)
+    var response: HttpResponse? = null
+
+    override fun onResponseReceived(response: HttpResponse) {
+        println("received")
+        this.response = response
     }
+
+    override fun onByteReceived(buf: ByteBuffer, p1: IOControl) {
+        ch.write(buf)
+    }
+
+    override fun buildResult(p0: HttpContext?): HttpResponse? {
+        println("build")
+        return response
+    }
+
+    override fun releaseResources() {
+        super.releaseResources()
+        ch.close()
+    }
+
+}
+
+class Cb(val url: String, val dest: File, val latch: CountDownLatch): FutureCallback<HttpResponse> {
 
     override fun completed(response: HttpResponse) {
 
@@ -66,15 +93,18 @@ class Cb(val url: String, val dest: File): FutureCallback<HttpResponse>, Consume
             }
         }
         println("success: " + url)
-        sink?.success(response)
+        latch.countDown()
     }
 
     override fun failed(e: Exception) {
-        sink?.error(e)
+        println("failure: " + url)
+        latch.countDown()
     }
 
     override fun cancelled() {
-        sink?.error(RuntimeException("canceled"))
+        println("canceled: " + url)
+        latch.countDown()
+
     }
 
 }
@@ -86,16 +116,13 @@ class ApacheSample {
 
         val  cli = Client()
 
-        val c = CountDownLatch(1)
-        Flux.just(*File("/Users/nryotaro/hoge.txt")
+        val e = File("/Users/nryotaro/hoge.txt")
                 .readLines()
-                .toTypedArray()).delayElements(Duration.ofMillis(100L)).map{ url ->
-            cli.download("https://www.sec.gov" + url, File("/tmp/hoge" + url))
-        }.flatMap { it.second }
-                .doOnNext {
-            log.debug(it.toString())
-        }.doOnTerminate {
-            c.countDown()
+        val c = CountDownLatch(e.size)
+
+         Flux.just(*e.toTypedArray())
+        .delayElements(Duration.ofMillis(100L)).map{ url: String ->
+          cli.download(Cb("https://www.sec.gov" + url, File("/tmp/hoge" + url), c))
         }.subscribe()
 
         c.await()
