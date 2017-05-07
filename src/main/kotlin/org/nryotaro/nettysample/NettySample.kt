@@ -24,21 +24,21 @@ class NettySample {
         val port = 443
         val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
 
-        var i = 1
-        WebClient.create()
         val group = NioEventLoopGroup()
         val b = Bootstrap()
         try {
             Thread.sleep(100L)
             val c: Bootstrap = b.group(group).channel(NioSocketChannel::class.java)
+            c.handler(HttpSnoopClientInitializer(sslCtx))
             while(true) {
-                i++
-                c.handler(HttpSnoopClientInitializer(sslCtx))
 
                 // Make the connection attempt.
-                val ch: Channel = b.connect(host, port).sync().channel()
+                //val ch: Channel = b.connect(host, port).sync().channel()
 
+                val chf = b.connect(host, port)
 
+                chf.sync().channel().pipeline()
+                /*
                 // Prepare the HTTP request.
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
                 request.headers().set(HttpHeaderNames.HOST, host)
@@ -53,6 +53,7 @@ class NettySample {
                 ch.closeFuture().addListener {
                     println("done")
                 }//.sync()
+                */
             }
 
         } finally {
@@ -77,6 +78,7 @@ class HttpSnoopClientInitializer(private val sslCtx: SslContext) : ChannelInitia
         // Uncomment the following line if you don't want to handle HttpContents.
         //p.addLast(new HttpObjectAggregator(1048576));
         p.addLast(HttpSnoopClientHandler())
+
     }
 }
 
@@ -117,12 +119,30 @@ class HttpSnoopClientHandler: SimpleChannelInboundHandler<HttpObject>() {
         }
     }
 
-    /*
     override fun channelActive(ctx: ChannelHandlerContext) {
         super.channelActive(ctx)
 
+        // Prepare the HTTP request.
+        val uri : URI = URI("https://www.sec.gov/Archives/edgar/data/1280600/000117911017004594/0001179110-17-004594.txt");
+        val host = "www.sec.gov"
+
+        val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
+        request.headers().set(HttpHeaderNames.HOST, host)
+        request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+        request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
+        // Set some example cookies.
+        //request.headers().set(HttpHeaderNames.COOKIE, ClientCookieEncoder.STRICT.encode(DefaultCookie("my-cookie", "foo"), DefaultCookie("another-cookie", "bar")))
+        // Send the HTTP request.
+        ctx.channel().writeAndFlush(request)
+
+        ctx.channel().closeFuture()
+
     }
-    */
+
+    override fun channelReadComplete(ctx: ChannelHandlerContext) {
+        super.channelReadComplete(ctx)
+        ctx.channel().closeFuture()
+    }
 
     override fun exceptionCaught(ctx: ChannelHandlerContext,  cause: Throwable) {
         cause.printStackTrace();
