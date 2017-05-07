@@ -24,6 +24,7 @@ class NettySample {
         val port = 443
         val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
 
+        var i = 1
         WebClient.create()
         val group = NioEventLoopGroup()
         val b = Bootstrap()
@@ -31,11 +32,12 @@ class NettySample {
             Thread.sleep(100L)
             val c: Bootstrap = b.group(group).channel(NioSocketChannel::class.java)
             while(true) {
+                i++
                 c.handler(HttpSnoopClientInitializer(sslCtx))
 
                 // Make the connection attempt.
-
                 val ch: Channel = b.connect(host, port).sync().channel()
+
 
                 // Prepare the HTTP request.
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
@@ -114,6 +116,13 @@ class HttpSnoopClientHandler: SimpleChannelInboundHandler<HttpObject>() {
             }
         }
     }
+
+    /*
+    override fun channelActive(ctx: ChannelHandlerContext) {
+        super.channelActive(ctx)
+
+    }
+    */
 
     override fun exceptionCaught(ctx: ChannelHandlerContext,  cause: Throwable) {
         cause.printStackTrace();
