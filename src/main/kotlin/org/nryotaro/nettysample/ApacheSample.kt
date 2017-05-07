@@ -50,7 +50,7 @@ class Client {
     }
 }
 
-class A(dest: File): AsyncByteConsumer<Boolean>() {
+class A(val dest: File): AsyncByteConsumer<Boolean>() {
 
     val ch = FileChannel.open(Paths.get(dest.toURI()),StandardOpenOption.WRITE)
     var response: HttpResponse? = null
@@ -61,6 +61,7 @@ class A(dest: File): AsyncByteConsumer<Boolean>() {
     }
 
     override fun onByteReceived(buf: ByteBuffer, p1: IOControl) {
+        println(dest.toString())
         ch.write(buf)
     }
 
@@ -117,7 +118,7 @@ class ApacheSample {
 
         val  cli = Client()
 
-        val e = File("/Users/nryotaro/hoge.txt")
+        val e = File("/hoge.txt")
                 .readLines()
         val c = CountDownLatch(e.size)
 
