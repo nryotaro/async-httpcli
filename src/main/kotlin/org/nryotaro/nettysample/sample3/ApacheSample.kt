@@ -1,4 +1,4 @@
-package org.nryotaro.nettysample
+package org.nryotaro.nettysample.sample3
 
 import org.apache.http.HttpHost
 import org.apache.http.HttpResponse
@@ -43,45 +43,15 @@ class Client(private val cli: CloseableHttpAsyncClient) {
         cli.close()
     }
 
-    fun download(cb: Cb): Future<Boolean> {
-
-        val c: HttpAsyncRequestProducer = BasicAsyncRequestProducer(HttpHost("www.sec.gov"), HttpGet(cb.url))
-        return cli.execute(c,A(cb.dest), cb)
+    fun download(cb: Cb): Future<HttpResponse> {
+        return cli.execute(HttpGet(cb.url), cb)
     }
 
 }
 
-class A(val dest: File): AsyncByteConsumer<Boolean>() {
+class Cb(val url: String, val dest: File, val latch: CountDownLatch): FutureCallback<HttpResponse> {
 
-    val ch = FileChannel.open(Paths.get(dest.toURI()),StandardOpenOption.WRITE)
-    var response: HttpResponse? = null
-
-    override fun onResponseReceived(response: HttpResponse) {
-        println("received")
-        this.response = response
-    }
-
-    override fun onByteReceived(buf: ByteBuffer, p1: IOControl) {
-        println(dest.toString())
-        ch.write(buf)
-    }
-
-    override fun buildResult(p0: HttpContext?): Boolean {
-        println("build")
-        return true
-    }
-
-    override fun releaseResources() {
-        super.releaseResources()
-        ch.close()
-    }
-
-}
-
-class Cb(val url: String, val dest: File, val latch: CountDownLatch): FutureCallback<Boolean> {
-
-    override fun completed(response: Boolean) {
-        /*
+    override fun completed(response: HttpResponse) {
         if (dest.exists()) {
             dest.delete()
         } else {
@@ -94,7 +64,6 @@ class Cb(val url: String, val dest: File, val latch: CountDownLatch): FutureCall
                 it.copyTo(out)
             }
         }
-        */
         println("success: " + url)
         latch.countDown()
     }
@@ -123,7 +92,9 @@ class ApacheSample {
                 .setConnectionManager(cm)
                 .build()
 
-        val  cli = Client(HttpAsyncClients.createDefault())
+        val  cli = Client(HttpAsyncClients.custom()
+                .setConnectionManager(cm)
+                .build())
 
         val e = File("/Users/nryotaro/hoge.txt")
                 .readLines()
