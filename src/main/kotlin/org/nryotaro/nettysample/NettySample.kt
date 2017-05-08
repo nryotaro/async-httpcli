@@ -27,15 +27,22 @@ class NettySample {
         val group = NioEventLoopGroup()
         val b = Bootstrap()
         try {
-            Thread.sleep(100L)
             val c: Bootstrap = b.group(group).channel(NioSocketChannel::class.java)
             c.handler(HttpSnoopClientInitializer(sslCtx))
+            val chf: ChannelFuture = b.connect(host, port)
             while(true) {
-
+                Thread.sleep(100L)
                 // Make the connection attempt.
                 //val ch: Channel = b.connect(host, port).sync().channel()
 
-                val chf = b.connect(host, port)
+
+                chf.addListener(object: ChannelFutureListener {
+                    override fun operationComplete(f: ChannelFuture?) {
+                        val list = chf.channel().pipeline().toMap()
+                        chf.channel().pipeline().addLast(HttpSnoopClientHandler())
+                    }
+                })
+
 
                 chf.sync().channel().pipeline()
                 /*
@@ -77,7 +84,7 @@ class HttpSnoopClientInitializer(private val sslCtx: SslContext) : ChannelInitia
         p.addLast(HttpContentDecompressor())
         // Uncomment the following line if you don't want to handle HttpContents.
         //p.addLast(new HttpObjectAggregator(1048576));
-        p.addLast(HttpSnoopClientHandler())
+        //p.addLast(HttpSnoopClientHandler())
 
     }
 }
@@ -141,7 +148,8 @@ class HttpSnoopClientHandler: SimpleChannelInboundHandler<HttpObject>() {
 
     override fun channelReadComplete(ctx: ChannelHandlerContext) {
         super.channelReadComplete(ctx)
-        ctx.channel().closeFuture()
+        ctx.pipeline().remove(this)
+        //ctx.channel().closeFuture()
     }
 
     override fun exceptionCaught(ctx: ChannelHandlerContext,  cause: Throwable) {
