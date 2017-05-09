@@ -1,4 +1,4 @@
-package org.nryotaro.httpcli
+package org.nryotaro.httpcli2
 
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.*
@@ -11,6 +11,8 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import java.net.URI
 import javax.net.ssl.SSLEngine
 import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.pool.*
+import io.netty.util.concurrent.Future
 import java.io.File
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
@@ -20,8 +22,13 @@ import java.util.concurrent.CountDownLatch
 class HttpCli(private val countDownLatch: CountDownLatch) {
 
     private val group = NioEventLoopGroup()
+
     private val bootstrap = Bootstrap().group(group).channel(NioSocketChannel::class.java)
+
+
     init {
+
+
         val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
 
         bootstrap.handler(object: ChannelInitializer<Channel>() {
@@ -35,10 +42,17 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
                 pipeline.addLast("decompressor", HttpContentDecompressor())
             }
         })
+
+        val pool = SimpleChannelPool(bootstrap, object: AbstractChannelPoolHandler(){
+            override fun channelCreated(ch: Channel) {
+            }
+        })
+
     }
 
-    fun close() {
-        group.shutdownGracefully()
+
+    fun close(): Future<*> {
+        return group.shutdownGracefully()
     }
 
     fun retrieve(uri: URI, destFile: File) {
@@ -112,4 +126,5 @@ fun main(args : Array<String>) {
 
     latch.await()
     println("Hello Kotlin!!")
+    cli.close()
 }
