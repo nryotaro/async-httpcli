@@ -40,21 +40,37 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 
     fun retrieve(uri: URI) {
 
-        println(uri.host)
-        println(uri.port)
-        println(uri.rawPath)
-
         val chf = bootstrap.connect(uri.host, 443)
         chf.addListener(object: ChannelFutureListener {
             override fun operationComplete(future: ChannelFuture) {
-                chf.channel().pipeline().addLast(object: SimpleChannelInboundHandler<HttpObject>(){
-                    override fun channelRead0(ctx: ChannelHandlerContext?, msg: HttpObject?) {
+                val pipeline = chf.channel().pipeline()
+                val names = pipeline.names()
+                pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
+                    override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
                         if(chf.isSuccess) {
 
                             println("foobar")
                             countDownLatch.countDown()
                         }
+
+                        if(msg is DefaultHttpResponse) {
+
+                        }
+                        if(msg is DefaultHttpContent) {
+
+                        }
+                        if(msg is LastHttpContent) {
+
+                            ctx.close()
+                        }
                     }
+
+                    /*
+                    override fun channelReadComplete(ctx: ChannelHandlerContext) {
+                        super.channelReadComplete(ctx)
+                        ctx.close()
+                    }
+                    */
                 })
 
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
@@ -65,8 +81,8 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 
                 //future.channel().pipeline().addLast
 
-
             }
+
         })
 
     }
@@ -77,8 +93,10 @@ fun main(args : Array<String>) {
     val latch = CountDownLatch(1)
     val cli = HttpCli(latch)
 
-    
-    cli.retrieve(URI("https://www.sec.gov/Archives/edgar/data/1280600/000117911017004594/0001179110-17-004594.txt"))
+    while (true) {
+      Thread.sleep(200L)
+      cli.retrieve(URI("https://www.sec.gov/Archives/edgar/data/1280600/000117911017004594/0001179110-17-004594.txt"))
+    }
 
     latch.await()
     println("Hello Kotlin!!")
