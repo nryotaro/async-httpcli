@@ -80,7 +80,7 @@ class HttpSnoopClientInitializer(private val sslCtx: SslContext) : ChannelInitia
 
         p.addLast(sslCtx.newHandler(ch.alloc()))
 
-        p.addLast(HttpClientCodec());
+     //   p.addLast(HttpClientCodec());
         // Remove the following line if you don't want automatic content decompression.
         p.addLast(HttpContentDecompressor())
         // Uncomment the following line if you don't want to handle HttpContents.

@@ -43,7 +43,7 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
         group.shutdownGracefully()
     }
 
-    fun retrieve(uri: URI, path: Path) {
+    fun retrieve(uri: URI, destFile: File) {
 
         val chf = bootstrap.connect(uri.host, 443)
         chf.addListener(object: ChannelFutureListener {
@@ -51,23 +51,25 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
                 val pipeline = chf.channel().pipeline()
                 val names = pipeline.names()
 
-                val dest = FileChannel.open(path, StandardOpenOption.WRITE)
+
+                if(!destFile.exists()) {
+                    destFile.parentFile.mkdirs()
+                }
+
+                val dest = FileChannel.open(destFile.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW)
 
                 pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
-                        if(chf.isSuccess) {
-
-                            println("foobar")
-                            countDownLatch.countDown()
-                        }
 
                         if(msg is DefaultHttpResponse) {
 
+                            println("$uri: "+ msg.status())
                         }
                         if(msg is DefaultHttpContent) {
                             dest.write(msg.content().nioBuffer())
                         }
                         if(msg is LastHttpContent) {
+                            countDownLatch.countDown()
                             dest.close()
                             ctx.close()
                         }
@@ -98,18 +100,16 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 }
 
 fun main(args : Array<String>) {
-    val latch = CountDownLatch(1)
-    val cli = HttpCli(latch)
+
 
     val localPrefix = "/tmp/hoge"
-    File("").readLines().forEach {
+    val lines =    File("/Users/nryotaro/hoge.txt").readLines()
+    val latch = CountDownLatch(lines.size)
+    val cli = HttpCli(latch)
+    lines.forEach {
         Thread.sleep(200L)
-        File(localPrefix + it).toPath()
-        
-    }
-    while (true) {
-      Thread.sleep(200L)
-      cli.retrieve(URI("https://www.sec.gov/Archives/edgar/data/1280600/000117911017004594/0001179110-17-004594.txt"))
+        cli.retrieve(URI("https://www.sec.gov" + it), File(localPrefix + it))
+
     }
 
     latch.await()
