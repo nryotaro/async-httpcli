@@ -22,7 +22,8 @@ class NettySample {
         val scheme: String = "https"
         val host = "www.sec.gov"
         val port = 443
-        val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+        val sslCtx
+                = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
 
         val group = NioEventLoopGroup()
         val b = Bootstrap()
