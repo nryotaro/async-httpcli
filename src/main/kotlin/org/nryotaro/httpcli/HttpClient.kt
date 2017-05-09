@@ -83,7 +83,7 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
                 request.headers().set(HttpHeaderNames.HOST, uri.host)
-                request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+                request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE)
                 request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
                 future.channel().writeAndFlush(request)
 

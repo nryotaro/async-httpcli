@@ -17,6 +17,11 @@ import java.io.File
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.CountDownLatch
+import io.netty.channel.pool.SimpleChannelPool
+import java.net.InetSocketAddress
+import io.netty.channel.pool.AbstractChannelPoolMap
+import io.netty.channel.pool.ChannelPoolMap
+import io.netty.util.concurrent.FutureListener
 
 
 class HttpCli(private val countDownLatch: CountDownLatch) {
@@ -25,83 +30,77 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 
     private val bootstrap = Bootstrap().group(group).channel(NioSocketChannel::class.java)
 
+    var i =0
 
-    init {
-
-
-        val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
-
-        bootstrap.handler(object: ChannelInitializer<Channel>() {
-            override fun initChannel(ch: Channel) {
-                val pipeline: ChannelPipeline = ch.pipeline();
-
-                val engine: SSLEngine = sslCtx.newEngine(ch.alloc());
-                pipeline.addFirst("ssl", SslHandler(engine))
-                pipeline.addLast("decoder", HttpResponseDecoder())
-                pipeline.addLast("encoder", HttpRequestEncoder())
-                pipeline.addLast("decompressor", HttpContentDecompressor())
-            }
-        })
-
-        val pool = SimpleChannelPool(bootstrap, object: AbstractChannelPoolHandler(){
-            override fun channelCreated(ch: Channel) {
-            }
-        })
-
+    private val poolMap = object : AbstractChannelPoolMap<InetSocketAddress, SimpleChannelPool>() {
+        override fun newPool(key: InetSocketAddress): SimpleChannelPool {
+            return SimpleChannelPool(bootstrap.remoteAddress(key),object: AbstractChannelPoolHandler(){
+                override fun channelCreated(ch: Channel) {
+                    val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+                    val pipeline: ChannelPipeline = ch.pipeline()
+                    val engine: SSLEngine = sslCtx.newEngine(ch.alloc());
+                    pipeline.addFirst("ssl", SslHandler(engine))
+                    pipeline.addLast("decoder", HttpResponseDecoder())
+                    pipeline.addLast("encoder", HttpRequestEncoder())
+                    pipeline.addLast("decompressor", HttpContentDecompressor())
+                }
+            })
+        }
     }
-
 
     fun close(): Future<*> {
         return group.shutdownGracefully()
     }
 
     fun retrieve(uri: URI, destFile: File) {
+        val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
+        val chf = pool.acquire()
 
-        val chf = bootstrap.connect(uri.host, 443)
-        chf.addListener(object: ChannelFutureListener {
-            override fun operationComplete(future: ChannelFuture) {
-                val pipeline = chf.channel().pipeline()
-                val names = pipeline.names()
+        chf.addListener(object: FutureListener<Channel> {
+            override fun operationComplete(future: Future<Channel>) {
+                if(future.isSuccess) {
+                    val channel = future.now
+                    val pipeline = channel.pipeline()
+                    val names = pipeline.names()
+                    if(!destFile.exists()) {
+                        destFile.parentFile.mkdirs()
+                    }
+                    val dest = FileChannel.open(destFile.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW)
+                    pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
+                        override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
 
+                            if(msg is DefaultHttpResponse) {
 
-                if(!destFile.exists()) {
-                    destFile.parentFile.mkdirs()
-                }
-
-                val dest = FileChannel.open(destFile.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW)
-
-                pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
-                    override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
-
-                        if(msg is DefaultHttpResponse) {
-
-                            println("$uri: "+ msg.status())
+                                println("$uri: "+ msg.status())
+                            }
+                            if(msg is DefaultHttpContent) {
+                                println(msg.content().isReadable)
+                               // dest.write(msg.content().nioBuffer())
+                            }
+                            if(msg is LastHttpContent) {
+                                countDownLatch.countDown()
+                                pool.release(ctx.channel())
+                                //println(i)
+                                dest.close()
+                            }
                         }
-                        if(msg is DefaultHttpContent) {
-                            dest.write(msg.content().nioBuffer())
-                        }
-                        if(msg is LastHttpContent) {
-                            countDownLatch.countDown()
+                        override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+                            //super.exceptionCaught(ctx, cause)
+                            //ctx.close()
+                            cause.printStackTrace()
+                            println(cause)
                             dest.close()
-                            ctx.close()
+                            pool.release(ctx.channel())
                         }
-                    }
+                    })
+                    //i++
+                    val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
+                    request.headers().set(HttpHeaderNames.HOST, uri.host)
+                    request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE)
+                    request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
+                    channel.writeAndFlush(request)
 
-                    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-                        super.exceptionCaught(ctx, cause)
-                        ctx.close()
-                        dest.close()
-                    }
-
-                })
-
-                val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
-                request.headers().set(HttpHeaderNames.HOST, uri.host)
-                request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
-                request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
-                future.channel().writeAndFlush(request)
-
-                //future.channel().pipeline().addLast
+                }
 
             }
 
