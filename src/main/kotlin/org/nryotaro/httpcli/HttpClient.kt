@@ -11,6 +11,11 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import java.net.URI
 import javax.net.ssl.SSLEngine
 import io.netty.channel.ChannelHandlerContext
+import java.io.File
+import java.nio.channels.FileChannel
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import java.util.concurrent.CountDownLatch
 
 
@@ -38,13 +43,16 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
         group.shutdownGracefully()
     }
 
-    fun retrieve(uri: URI) {
+    fun retrieve(uri: URI, path: Path) {
 
         val chf = bootstrap.connect(uri.host, 443)
         chf.addListener(object: ChannelFutureListener {
             override fun operationComplete(future: ChannelFuture) {
                 val pipeline = chf.channel().pipeline()
                 val names = pipeline.names()
+
+                val dest = FileChannel.open(path, StandardOpenOption.WRITE)
+
                 pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
                         if(chf.isSuccess) {
@@ -57,20 +65,20 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 
                         }
                         if(msg is DefaultHttpContent) {
-
+                            dest.write(msg.content().nioBuffer())
                         }
                         if(msg is LastHttpContent) {
-
+                            dest.close()
                             ctx.close()
                         }
                     }
 
-                    /*
-                    override fun channelReadComplete(ctx: ChannelHandlerContext) {
-                        super.channelReadComplete(ctx)
+                    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+                        super.exceptionCaught(ctx, cause)
                         ctx.close()
+                        dest.close()
                     }
-                    */
+
                 })
 
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
@@ -93,6 +101,12 @@ fun main(args : Array<String>) {
     val latch = CountDownLatch(1)
     val cli = HttpCli(latch)
 
+    val localPrefix = "/tmp/hoge"
+    File("").readLines().forEach {
+        Thread.sleep(200L)
+        File(localPrefix + it).toPath()
+        
+    }
     while (true) {
       Thread.sleep(200L)
       cli.retrieve(URI("https://www.sec.gov/Archives/edgar/data/1280600/000117911017004594/0001179110-17-004594.txt"))
