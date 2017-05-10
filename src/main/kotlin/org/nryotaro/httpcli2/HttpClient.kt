@@ -122,9 +122,7 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
             }
 
         })
-
     }
-
 }
 
 fun main(args : Array<String>) {
