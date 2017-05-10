@@ -30,8 +30,6 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 
     private val bootstrap = Bootstrap().group(group).channel(NioSocketChannel::class.java)
 
-    var i =0
-
     private val poolMap = object : AbstractChannelPoolMap<InetSocketAddress, SimpleChannelPool>() {
         override fun newPool(key: InetSocketAddress): SimpleChannelPool {
             return SimpleChannelPool(bootstrap.remoteAddress(key),object: AbstractChannelPoolHandler(){
@@ -56,7 +54,10 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
         val chf = pool.acquire()
 
+        var failed = false
+
         chf.addListener(object: FutureListener<Channel> {
+
             override fun operationComplete(future: Future<Channel>) {
                 if(future.isSuccess) {
                     val channel = future.now
@@ -65,31 +66,41 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
                     if(!destFile.exists()) {
                         destFile.parentFile.mkdirs()
                     }
-                    val dest = FileChannel.open(destFile.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW)
+                    destFile.deleteOnExit()
+                    destFile.createNewFile()
+
+                    var dest: FileChannel = FileChannel.open(destFile.toPath(), StandardOpenOption.APPEND)
+                    println("open: " + destFile.toString())
+
                     pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
                         override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
 
                             if(msg is DefaultHttpResponse) {
-
                                 println("$uri: "+ msg.status())
                             }
                             if(msg is DefaultHttpContent) {
-                                println(msg.content().isReadable)
-                               // dest.write(msg.content().nioBuffer())
+                                if(!dest.isOpen) {
+                                    dest = FileChannel.open(destFile.toPath(), StandardOpenOption.WRITE,
+                                            StandardOpenOption.APPEND)
+                                }
+                                if(!failed) {
+                                    dest.write(msg.content().nioBuffer())
+                                }
                             }
                             if(msg is LastHttpContent) {
                                 countDownLatch.countDown()
                                 pool.release(ctx.channel())
-                                //println(i)
+                                println("close: " + destFile.toString())
                                 dest.close()
                             }
                         }
                         override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
                             //super.exceptionCaught(ctx, cause)
                             //ctx.close()
+                            failed = true
                             cause.printStackTrace()
-                            println(cause)
                             dest.close()
+                            destFile.delete()
                             pool.release(ctx.channel())
                         }
                     })
@@ -113,7 +124,7 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 fun main(args : Array<String>) {
 
 
-    val localPrefix = "/tmp/hoge"
+    val localPrefix = "/Users/nryotaro/hoge"
     val lines =    File("/Users/nryotaro/hoge.txt").readLines()
     val latch = CountDownLatch(lines.size)
     val cli = HttpCli(latch)

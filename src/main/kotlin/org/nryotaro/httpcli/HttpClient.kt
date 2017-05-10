@@ -100,7 +100,7 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
 fun main(args : Array<String>) {
 
 
-    val localPrefix = "/tmp/hoge"
+    val localPrefix = "/Users/nryotaro/hoge"
     val lines =    File("/Users/nryotaro/hoge.txt").readLines()
     val latch = CountDownLatch(lines.size)
     val cli = HttpCli(latch)
