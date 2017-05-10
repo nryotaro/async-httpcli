@@ -112,4 +112,5 @@ fun main(args : Array<String>) {
 
     latch.await()
     println("Hello Kotlin!!")
+    cli.close()
 }

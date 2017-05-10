@@ -66,7 +66,9 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
                     if(!destFile.exists()) {
                         destFile.parentFile.mkdirs()
                     }
-                    destFile.deleteOnExit()
+                    if(destFile.exists()) {
+                        destFile.delete()
+                    }
                     destFile.createNewFile()
 
                     var dest: FileChannel = FileChannel.open(destFile.toPath(), StandardOpenOption.APPEND)
@@ -79,12 +81,17 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
                                 println("$uri: "+ msg.status())
                             }
                             if(msg is DefaultHttpContent) {
-                                if(!dest.isOpen) {
+                                if(!dest.isOpen && !failed) {
                                     dest = FileChannel.open(destFile.toPath(), StandardOpenOption.WRITE,
                                             StandardOpenOption.APPEND)
                                 }
                                 if(!failed) {
-                                    dest.write(msg.content().nioBuffer())
+                                    try {
+
+                                        dest.write(msg.content().nioBuffer())
+                                    } catch(e: Exception) {
+                                        println(e)
+                                    }
                                 }
                             }
                             if(msg is LastHttpContent) {
