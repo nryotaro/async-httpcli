@@ -87,7 +87,6 @@ class HttpCli(private val countDownLatch: CountDownLatch) {
                                 }
                                 if(!failed) {
                                     try {
-
                                         dest.write(msg.content().nioBuffer())
                                     } catch(e: Exception) {
                                         println(e)
