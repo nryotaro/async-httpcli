@@ -1,4 +1,4 @@
-package org.nryotaro.httpcli
+package org.nryotaro.httpcli3
 
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.*
