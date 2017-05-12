@@ -1,6 +1,8 @@
 package org.nryotaro.httplci
 
 import io.netty.bootstrap.ServerBootstrap
+import io.netty.buffer.ByteBuf
+import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
@@ -11,11 +13,13 @@ import io.netty.handler.ssl.SslHandler
 import io.netty.handler.ssl.util.SelfSignedCertificate
 import io.netty.handler.stream.ChunkedNioFile
 import io.netty.handler.stream.ChunkedWriteHandler
+import io.netty.util.CharsetUtil
 import io.netty.util.concurrent.Future
 import org.junit.Test
 import org.nryotaro.httpcli.HttpCli
 import java.io.RandomAccessFile
 import java.net.InetSocketAddress
+import java.nio.charset.StandardCharsets
 
 class HttpCliTest {
 
@@ -24,7 +28,9 @@ class HttpCliTest {
 
         val server = TestServer()
 
-        server.start()
+        val chan = server.start()
+
+        chan.closeFuture().sync()
         //val cli = HttpCli()
     }
 }
@@ -52,8 +58,8 @@ class TestServer {
                 })
     }
 
-    fun start() {
-        bootstrap.bind().sync()
+    fun start(): Channel {
+        return bootstrap.bind().sync().channel()
     }
 }
 
@@ -65,30 +71,31 @@ class TestHandler: SimpleChannelInboundHandler<HttpObject>() {
 
         }
         if(msg is LastHttpContent) {
-            val file = RandomAccessFile("/Users/nryotaro/foobar.txt", "r")
             val resp = DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
             resp.headers().set(HttpHeaders.Names.CONTENT_TYPE, "text/plain; charset=UTF-8")
 
             // if keep alive
-            resp.headers().set(HttpHeaders.Names.CONTENT_LENGTH, file.length())
+            val c: ByteBuf =Unpooled.copiedBuffer("Netty rocks!", CharsetUtil.UTF_8)
+
+            resp.headers().set(HttpHeaders.Names.CONTENT_LENGTH, c.readableBytes())
             resp.headers().set( HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE)
             // end
+
+            val cc = c.readableBytes()
 
             ctx.write(resp)
             // not compress
             if (ctx.pipeline().get(SslHandler::class.java) == null) {
-                ctx.write(DefaultFileRegion(
-                        file.channel, 0, file.length()))
-
-                ctx.write("hello world")
+                ctx.write(c)
             } else {
-                ctx.write(ChunkedNioFile(file.channel))
+                ctx.write(c)
             }
             val future = ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT)
         }
 
     }
     override fun exceptionCaught(ctx: ChannelHandlerContext , cause: Throwable ){
+        cause.printStackTrace()
         println("errror")
     }
 }
