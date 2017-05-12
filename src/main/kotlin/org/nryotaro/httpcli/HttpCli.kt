@@ -50,11 +50,23 @@ class HttpCli() {
         return group.shutdownGracefully()
     }
 
-    fun get(uri: URI, listener: FutureListener<Channel>) {
+    fun get(uri: URI) {
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
         val chf = pool.acquire()
-        chf.addListener(listener)
+        chf.addListener( FutureListener<Channel> {
+            if(it.isSuccess) {
+                val pipeline = it.now.pipeline()
+
+                pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
+                    override fun channelRead0(ctx: ChannelHandlerContext, httpObject: HttpObject) {
+                        TODO("not implemented")
+                    }
+
+                })
+            }
+        })
     }
+
 
     fun retrieve(uri: URI, destFile: File) {
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
