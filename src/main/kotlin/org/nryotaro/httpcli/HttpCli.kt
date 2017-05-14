@@ -66,15 +66,21 @@ class HttpCli {
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, port(uri)))
         val chf: Future<Channel> = pool.acquire()
         chf.addListener( FutureListener<Channel> {
+
             if(it.isSuccess) {
                 val channel = it.now
                 val pipeline = channel.pipeline()
+
                 pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
                         when(msg) {
                             is DefaultHttpResponse -> handler.acceptHttpResponse(msg)
                             is DefaultHttpContent -> handler.acceptContent(msg)
-                            is LastHttpContent -> handler.acceptLastHttpContent(msg)
+                            is LastHttpContent -> {
+                                // TODO default last http content
+                                handler.acceptLastHttpContent(msg)
+                                pool.release(ctx.channel())
+                            }
                         }
                     }
                     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
@@ -91,6 +97,7 @@ class HttpCli {
                 handler.onFailure(it.cause())
             }
         })
+
     }
 
 

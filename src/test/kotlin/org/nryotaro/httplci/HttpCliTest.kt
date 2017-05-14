@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets
 /**
  * TODO https://localhost -> 443
  * TODO unexisted url(https://adfasdfasdfas)
+ * TODO handle not 200 response
  */
 class HttpCliTest {
 
@@ -40,18 +41,28 @@ class HttpCliTest {
         val cli = HttpCli()
 
         cli.get("https://localhost:8443", object: CliHandler {
-            override fun acceptLastHttpContent(msg: LastHttpContent) {
-                println("acceptLastHttpContent:" + msg)
+
+            var failed = false
+            var cachedContent: ByteArray = ByteArray(0)
+            override fun acceptHttpResponse(response: HttpResponse) {
+
+                failed = response.status() != HttpResponseStatus.OK
+            }
+
+            override fun acceptLastHttpContent(content: LastHttpContent) {
+                println(String(cachedContent))
             }
 
             override fun acceptContent(content: HttpContent) {
+                if(failed) {
+                    return
+                }
 
-                println("acceptContent:" + content)
-            }
-
-            override fun acceptHttpResponse(response: HttpResponse) {
-
-                println("httpResponse: " + response)
+                val buf = content.content()
+                val length = buf.readableBytes()
+                val array = ByteArray(length)
+                buf.getBytes(buf.readerIndex(), array)
+                cachedContent = byteArrayOf(*cachedContent, *array)
             }
 
             override fun onFailure(cause: Throwable) {
