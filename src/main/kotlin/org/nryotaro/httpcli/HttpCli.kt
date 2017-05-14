@@ -21,43 +21,73 @@ import io.netty.channel.pool.SimpleChannelPool
 import java.net.InetSocketAddress
 import io.netty.channel.pool.AbstractChannelPoolMap
 import io.netty.channel.pool.ChannelPoolMap
+import io.netty.handler.timeout.IdleStateHandler
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.concurrent.FutureListener
 import org.nryotaro.handler.CliHandler
+import org.nryotaro.handler.SslExceptionHandler
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 
-class HttpCli(private val readTimeout: Duration = Duration.ofMillis(10000)) {
+class HttpCli(
+        private val readTimeout: Duration = Duration.ofSeconds(10),
+        private val handshakeTimeout: Duration = Duration.ofSeconds(10),
+        private val sslExceptionHandler: SslExceptionHandler= object: SslExceptionHandler{
+            override fun onHandshakeFailure(cause: Throwable) {
+                cause.printStackTrace()
+            }
+        }
+        ) {
 
     private val group = NioEventLoopGroup()
 
-    private val bootstrap = Bootstrap().group(group).channel(NioSocketChannel::class.java)
+    private val bootstrap = Bootstrap().group(group)
+            .channel(NioSocketChannel::class.java)
 
     private val poolMap = object : AbstractChannelPoolMap<InetSocketAddress, SimpleChannelPool>() {
         override fun newPool(key: InetSocketAddress): SimpleChannelPool {
             return SimpleChannelPool(bootstrap.remoteAddress(key),object: AbstractChannelPoolHandler(){
                 override fun channelCreated(ch: Channel) {
-                    val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
                     val pipeline: ChannelPipeline = ch.pipeline()
-                    val engine: SSLEngine = sslCtx.newEngine(ch.alloc());
 
-                    val sslHandler = SslHandler(engine)
-                    sslHandler.setHandshakeTimeout(100, TimeUnit.MILLISECONDS)
-                    val c: Future<Channel> = sslHandler.handshakeFuture().addListener {
-                        it.isSuccess
-                    }
-
-                    pipeline.addFirst("ssl", sslHandler)
-
+                    pipeline.addFirst("ssl", buildSSlHandler(ch))
                     pipeline.addLast("decoder", HttpResponseDecoder())
                     pipeline.addLast("encoder", HttpRequestEncoder())
                     pipeline.addLast("decompressor", HttpContentDecompressor())
                     pipeline.addLast("readtimeout", ReadTimeoutHandler(readTimeout.toMillis(), TimeUnit.MILLISECONDS))
+
+                    //ch.closeFuture().addListener(ChannelFutureListener.CLOSE_ON_FAILURE)
+                    ch.closeFuture().addListener{
+                        it
+                    }
                 }
-            })
+
+                override fun channelAcquired(ch: Channel) {
+                    super.channelAcquired(ch)
+                }
+
+                override fun channelReleased(ch: Channel) {
+                    super.channelReleased(ch)
+                }
+            }
+            )
         }
+    }
+
+    private fun buildSSlHandler(ch: Channel): SslHandler {
+        val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+        val engine: SSLEngine = sslCtx.newEngine(ch.alloc())
+        val sslHandler = SslHandler(engine)
+        sslHandler.setHandshakeTimeout(handshakeTimeout.toMillis(), TimeUnit.MILLISECONDS)
+        val c: Future<Channel> = sslHandler.handshakeFuture().addListener {
+            // TODO handle cancellation
+            if(!it.isSuccess) {
+                sslExceptionHandler.onHandshakeFailure(it.cause())
+            }
+        }
+        return sslHandler
     }
 
     fun close(): Future<*> {
@@ -69,7 +99,7 @@ class HttpCli(private val readTimeout: Duration = Duration.ofMillis(10000)) {
             -1 -> when(uri.scheme) {
                 "http" -> 80
                 "https" -> 443
-                else -> throw RuntimeException("")
+                else -> throw RuntimeException("failed to infer the port of $uri")
             }
             else -> uri.port
         }
@@ -88,17 +118,20 @@ class HttpCli(private val readTimeout: Duration = Duration.ofMillis(10000)) {
                 pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
                         when(msg) {
-                            is DefaultHttpResponse -> handler.acceptHttpResponse(msg)
-                            is DefaultHttpContent -> handler.acceptContent(msg)
+                            is HttpResponse -> handler.acceptHttpResponse(msg)
                             is LastHttpContent -> {
-                                // TODO default last http content
                                 handler.acceptLastHttpContent(msg)
                                 pool.release(ctx.channel())
                             }
+                            is HttpContent -> handler.acceptContent(msg)
+
                         }
                     }
                     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
                         handler.onException(ctx, cause)
+
+                        ctx.close()
+                        pool.release(ctx.channel())
                     }
                 })
                 // TODO GZIP

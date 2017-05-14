@@ -26,9 +26,11 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 
 /**
- * TODO https://localhost -> 443
- * TODO unexisted url(https://adfasdfasdfas)
- * TODO handle not 200 response
+ * TODO
+ *  https://localhost -> 443
+ *  unexisted url(https://adfasdfasdfas)
+ *  handle not 200 response
+ *  http
  */
 class HttpCliTest {
 
@@ -50,6 +52,16 @@ class HttpCliTest {
             }
 
             override fun acceptLastHttpContent(content: LastHttpContent) {
+                if(failed) {
+                    return
+                }
+
+                val buf = content.content()
+                val length = buf.readableBytes()
+                val array = ByteArray(length)
+                buf.getBytes(buf.readerIndex(), array)
+                cachedContent = byteArrayOf(*cachedContent, *array)
+
                 println(String(cachedContent))
             }
 
