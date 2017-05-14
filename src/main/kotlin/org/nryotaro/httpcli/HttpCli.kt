@@ -21,11 +21,15 @@ import io.netty.channel.pool.SimpleChannelPool
 import java.net.InetSocketAddress
 import io.netty.channel.pool.AbstractChannelPoolMap
 import io.netty.channel.pool.ChannelPoolMap
+import io.netty.handler.timeout.ReadTimeoutHandler
+import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.concurrent.FutureListener
 import org.nryotaro.handler.CliHandler
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 
-class HttpCli {
+class HttpCli(private val readTimeout: Duration = Duration.ofMillis(10000)) {
 
     private val group = NioEventLoopGroup()
 
@@ -38,10 +42,19 @@ class HttpCli {
                     val sslCtx = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
                     val pipeline: ChannelPipeline = ch.pipeline()
                     val engine: SSLEngine = sslCtx.newEngine(ch.alloc());
-                    pipeline.addFirst("ssl", SslHandler(engine))
+
+                    val sslHandler = SslHandler(engine)
+                    sslHandler.setHandshakeTimeout(100, TimeUnit.MILLISECONDS)
+                    val c: Future<Channel> = sslHandler.handshakeFuture().addListener {
+                        it.isSuccess
+                    }
+
+                    pipeline.addFirst("ssl", sslHandler)
+
                     pipeline.addLast("decoder", HttpResponseDecoder())
                     pipeline.addLast("encoder", HttpRequestEncoder())
                     pipeline.addLast("decompressor", HttpContentDecompressor())
+                    pipeline.addLast("readtimeout", ReadTimeoutHandler(readTimeout.toMillis(), TimeUnit.MILLISECONDS))
                 }
             })
         }
@@ -67,6 +80,7 @@ class HttpCli {
         val chf: Future<Channel> = pool.acquire()
         chf.addListener( FutureListener<Channel> {
 
+            //ChannelOption.CONNECT_TIMEOUT_MILLIS
             if(it.isSuccess) {
                 val channel = it.now
                 val pipeline = channel.pipeline()
