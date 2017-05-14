@@ -51,14 +51,24 @@ class HttpCli {
         return group.shutdownGracefully()
     }
 
-    fun get(uri: URI, handler: CliHandler) {
-        val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
-        val chf = pool.acquire()
+    private fun port(uri: URI): Int {
+        return when(uri.port) {
+            -1 -> when(uri.scheme) {
+                "http" -> 80
+                "https" -> 443
+                else -> throw RuntimeException("")
+            }
+            else -> uri.port
+        }
+    }
+    fun get(url: String, handler: CliHandler) {
+        val uri = URI(url)
+        val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, port(uri)))
+        val chf: Future<Channel> = pool.acquire()
         chf.addListener( FutureListener<Channel> {
-
             if(it.isSuccess) {
-                val pipeline = it.now.pipeline()
-
+                val channel = it.now
+                val pipeline = channel.pipeline()
                 pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
                         when(msg) {
@@ -71,8 +81,14 @@ class HttpCli {
                         handler.onException(ctx, cause)
                     }
                 })
+                // TODO GZIP
+                val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
+                request.headers().set(HttpHeaderNames.HOST, uri.host)
+                request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE)
+                request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
+                channel.writeAndFlush(request)
             } else {
-                handler.onFailure()
+                handler.onFailure(it.cause())
             }
         })
     }
