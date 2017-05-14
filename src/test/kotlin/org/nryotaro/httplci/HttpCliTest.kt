@@ -17,6 +17,7 @@ import io.netty.util.CharsetUtil
 import io.netty.util.concurrent.Future
 import io.netty.util.concurrent.FutureListener
 import org.junit.Test
+import org.nryotaro.handler.CliHandler
 import org.nryotaro.httpcli.HttpCli
 import java.io.RandomAccessFile
 import java.net.InetSocketAddress
@@ -33,10 +34,30 @@ class HttpCliTest {
 
         val cli = HttpCli()
 
-        cli.get(URI("http://localhost:8443"), FutureListener<Channel>{
+        cli.get(URI("http://localhost:8443"), object: CliHandler {
+            override fun acceptLastHttpContent(msg: LastHttpContent) {
+                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+            }
 
+            override fun acceptContent(msg: HttpContent) {
+                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+            }
+
+            override fun acceptHttpResponse(response: HttpResponse) {
+                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+            }
+
+            override fun onFailure() {
+                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+            }
+
+            override fun onException(ctx: ChannelHandlerContext, cause: Throwable) {
+                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+            }
         })
         chan.closeFuture().awaitUninterruptibly(10*1000L);
+        cli.close().sync()
+
     }
 }
 

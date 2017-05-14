@@ -22,9 +22,10 @@ import java.net.InetSocketAddress
 import io.netty.channel.pool.AbstractChannelPoolMap
 import io.netty.channel.pool.ChannelPoolMap
 import io.netty.util.concurrent.FutureListener
+import org.nryotaro.handler.CliHandler
 
 
-class HttpCli() {
+class HttpCli {
 
     private val group = NioEventLoopGroup()
 
@@ -50,19 +51,28 @@ class HttpCli() {
         return group.shutdownGracefully()
     }
 
-    fun get(uri: URI) {
+    fun get(uri: URI, handler: CliHandler) {
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
         val chf = pool.acquire()
         chf.addListener( FutureListener<Channel> {
+
             if(it.isSuccess) {
                 val pipeline = it.now.pipeline()
 
                 pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
-                    override fun channelRead0(ctx: ChannelHandlerContext, httpObject: HttpObject) {
-                        TODO("not implemented")
+                    override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
+                        when(msg) {
+                            is DefaultHttpResponse -> handler.acceptHttpResponse(msg)
+                            is DefaultHttpContent -> handler.acceptContent(msg)
+                            is LastHttpContent -> handler.acceptLastHttpContent(msg)
+                        }
                     }
-
+                    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+                        handler.onException(ctx, cause)
+                    }
                 })
+            } else {
+                handler.onFailure()
             }
         })
     }
