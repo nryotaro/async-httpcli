@@ -32,14 +32,15 @@ import java.util.concurrent.TimeUnit
 
 
 class HttpCli(
-        private val readTimeout: Duration = Duration.ofSeconds(10),
         private val handshakeTimeout: Duration = Duration.ofSeconds(10),
         private val sslExceptionHandler: SslExceptionHandler= object: SslExceptionHandler{
             override fun onHandshakeFailure(cause: Throwable) {
                 cause.printStackTrace()
-            }
-        }
-        ) {
+            } }) {
+
+    private val SSL = "ssl"
+    private val READ_TIMEOUT = "read_timeout"
+    private val SPECIFIC = "specific"
 
     private val group = NioEventLoopGroup()
 
@@ -56,12 +57,6 @@ class HttpCli(
                     pipeline.addLast("decoder", HttpResponseDecoder())
                     pipeline.addLast("encoder", HttpRequestEncoder())
                     pipeline.addLast("decompressor", HttpContentDecompressor())
-                    pipeline.addLast("readtimeout", ReadTimeoutHandler(readTimeout.toMillis(), TimeUnit.MILLISECONDS))
-
-                    //ch.closeFuture().addListener(ChannelFutureListener.CLOSE_ON_FAILURE)
-                    ch.closeFuture().addListener{
-                        it
-                    }
                 }
 
                 override fun channelAcquired(ch: Channel) {
@@ -70,6 +65,9 @@ class HttpCli(
 
                 override fun channelReleased(ch: Channel) {
                     super.channelReleased(ch)
+                    ch.pipeline().remove(READ_TIMEOUT)
+                    ch.pipeline().remove(SPECIFIC)
+
                 }
             }
             )
@@ -104,10 +102,11 @@ class HttpCli(
             else -> uri.port
         }
     }
-    fun get(url: String, handler: CliHandler) {
+    fun get(url: String, handler: CliHandler, readTimeout: Duration = Duration.ofSeconds(10)) {
         val uri = URI(url)
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, port(uri)))
         val chf: Future<Channel> = pool.acquire()
+
         chf.addListener( FutureListener<Channel> {
 
             //ChannelOption.CONNECT_TIMEOUT_MILLIS
@@ -115,7 +114,8 @@ class HttpCli(
                 val channel = it.now
                 val pipeline = channel.pipeline()
 
-                pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
+                pipeline.addLast(READ_TIMEOUT, ReadTimeoutHandler(readTimeout.toMillis(), TimeUnit.MILLISECONDS))
+                pipeline.addLast(SPECIFIC, object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
                         when(msg) {
                             is HttpResponse -> handler.acceptHttpResponse(msg)
@@ -134,6 +134,11 @@ class HttpCli(
                         pool.release(ctx.channel())
                     }
                 })
+
+                //ch.closeFuture().addListener(ChannelFutureListener.CLOSE_ON_FAILURE)
+                channel.closeFuture().addListener {
+                    it
+                }
                 // TODO GZIP
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
                 request.headers().set(HttpHeaderNames.HOST, uri.host)

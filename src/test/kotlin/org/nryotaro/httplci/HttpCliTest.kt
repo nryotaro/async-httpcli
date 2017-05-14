@@ -42,7 +42,16 @@ class HttpCliTest {
 
         val cli = HttpCli()
 
-        cli.get("https://localhost:8443", object: CliHandler {
+        cli.get("https://localhost:8443", createHandler())
+        Thread.sleep(10000)
+        cli.get("https://localhost:8443", createHandler())
+
+        chan.closeFuture().sync()
+
+    }
+
+    fun createHandler(): CliHandler {
+        return object: CliHandler {
 
             var failed = false
             var cachedContent: ByteArray = ByteArray(0)
@@ -85,10 +94,7 @@ class HttpCliTest {
             override fun onException(ctx: ChannelHandlerContext, cause: Throwable) {
                 cause.printStackTrace()
             }
-        })
-
-        chan.closeFuture().sync()
-
+        }
     }
 }
 
