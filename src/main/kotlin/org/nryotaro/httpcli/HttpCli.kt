@@ -1,5 +1,6 @@
 package org.nryotaro.httpcli
 
+import com.sun.jdi.connect.spi.ClosedConnectionException
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
@@ -47,7 +48,6 @@ class HttpCli(
     private val bootstrap = Bootstrap().group(group)
             .channel(NioSocketChannel::class.java)
 
-    // TODO fixChannelpool
     private val poolMap = object : AbstractChannelPoolMap<InetSocketAddress, SimpleChannelPool>() {
         override fun newPool(key: InetSocketAddress): SimpleChannelPool {
             return SimpleChannelPool(bootstrap.remoteAddress(key),object: AbstractChannelPoolHandler(){
@@ -69,8 +69,7 @@ class HttpCli(
                     ch.pipeline().remove(SPECIFIC)
 
                 }
-            }
-            )
+            })
         }
     }
 
@@ -130,6 +129,10 @@ class HttpCli(
 
                         }
                     }
+
+                    /*
+                     * invoked when ReadTimeoutException occurred
+                     */
                     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
                         handler.onException(ctx, cause)
                         ctx.close()
@@ -137,10 +140,18 @@ class HttpCli(
                     }
                 })
 
-                //ch.closeFuture().addListener(ChannelFutureListener.CLOSE_ON_FAILURE)
-                channel.closeFuture().addListener {
-                    it
-                }
+                /**
+                 * ??? required
+                 */
+                channel.closeFuture().addListener(object: ChannelFutureListener {
+                    override fun operationComplete(future: ChannelFuture) {
+                        if(!future.isSuccess) {
+                            println(future.channel().isOpen)
+
+                            future.channel().close()
+                        }
+                    }
+                })
                 // TODO GZIP
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
                 request.headers().set(HttpHeaderNames.HOST, uri.host)
