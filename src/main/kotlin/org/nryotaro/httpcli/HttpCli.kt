@@ -47,13 +47,13 @@ class HttpCli(
     private val bootstrap = Bootstrap().group(group)
             .channel(NioSocketChannel::class.java)
 
+    // TODO fixChannelpool
     private val poolMap = object : AbstractChannelPoolMap<InetSocketAddress, SimpleChannelPool>() {
         override fun newPool(key: InetSocketAddress): SimpleChannelPool {
             return SimpleChannelPool(bootstrap.remoteAddress(key),object: AbstractChannelPoolHandler(){
                 override fun channelCreated(ch: Channel) {
                     val pipeline: ChannelPipeline = ch.pipeline()
 
-                    pipeline.addFirst("ssl", buildSSlHandler(ch))
                     pipeline.addLast("decoder", HttpResponseDecoder())
                     pipeline.addLast("encoder", HttpRequestEncoder())
                     pipeline.addLast("decompressor", HttpContentDecompressor())
@@ -114,6 +114,9 @@ class HttpCli(
                 val channel = it.now
                 val pipeline = channel.pipeline()
 
+                if(uri.scheme == "https" && pipeline.get(SSL) == null) {
+                    pipeline.addFirst(SSL, buildSSlHandler(channel))
+                }
                 pipeline.addLast(READ_TIMEOUT, ReadTimeoutHandler(readTimeout.toMillis(), TimeUnit.MILLISECONDS))
                 pipeline.addLast(SPECIFIC, object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
@@ -129,7 +132,6 @@ class HttpCli(
                     }
                     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
                         handler.onException(ctx, cause)
-
                         ctx.close()
                         pool.release(ctx.channel())
                     }
