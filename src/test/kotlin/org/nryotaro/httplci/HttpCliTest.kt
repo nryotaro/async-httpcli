@@ -34,7 +34,7 @@ import java.nio.charset.StandardCharsets
  */
 class HttpCliTest {
 
-    @Test
+    //@Test
     fun getSuccessFully() {
 
         val server = TestServer()
