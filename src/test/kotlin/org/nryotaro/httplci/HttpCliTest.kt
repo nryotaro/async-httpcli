@@ -114,9 +114,9 @@ class TestServer {
                         pipeline.addLast("ssl", context.newHandler(channel.alloc()));
                         pipeline.addLast("decoder", HttpRequestDecoder())
                         pipeline.addLast("encoder", HttpResponseEncoder())
-                        //pipeline.addLast("compressor", HttpContentCompressor())
                         pipeline.addLast(ChunkedWriteHandler()) // order
                         pipeline.addLast("simple", TestHandler())
+                        pipeline.addLast("compressor", HttpContentCompressor())
                     }
                 })
     }

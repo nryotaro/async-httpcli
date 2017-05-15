@@ -1,35 +1,29 @@
 package org.nryotaro.httpcli
 
-import com.sun.jdi.connect.spi.ClosedConnectionException
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.pool.AbstractChannelPoolHandler
+import io.netty.channel.pool.AbstractChannelPoolMap
+import io.netty.channel.pool.SimpleChannelPool
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.*
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.SslHandler
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
-import java.net.URI
-import javax.net.ssl.SSLEngine
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.pool.*
-import io.netty.util.concurrent.Future
-import java.io.File
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
-import java.util.concurrent.CountDownLatch
-import io.netty.channel.pool.SimpleChannelPool
-import java.net.InetSocketAddress
-import io.netty.channel.pool.AbstractChannelPoolMap
-import io.netty.channel.pool.ChannelPoolMap
-import io.netty.handler.timeout.IdleStateHandler
 import io.netty.handler.timeout.ReadTimeoutHandler
-import io.netty.handler.timeout.WriteTimeoutHandler
+import io.netty.util.concurrent.Future
 import io.netty.util.concurrent.FutureListener
 import org.nryotaro.handler.CliHandler
 import org.nryotaro.handler.SslExceptionHandler
+import java.io.File
+import java.net.InetSocketAddress
+import java.net.URI
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLEngine
 
 
 class HttpCli(
@@ -135,7 +129,7 @@ class HttpCli(
                      */
                     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
                         handler.onException(ctx, cause)
-                        ctx.close()
+                        ctx.close() //TODO required?
                         pool.release(ctx.channel())
                     }
                 })
@@ -165,7 +159,7 @@ class HttpCli(
 
     }
 
-
+    @Deprecated("for reference")
     fun retrieve(uri: URI, destFile: File) {
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
         val chf = pool.acquire()
@@ -229,6 +223,7 @@ class HttpCli(
                     val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
                     request.headers().set(HttpHeaderNames.HOST, uri.host)
                     request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE)
+                    // deflate
                     request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
                     channel.writeAndFlush(request)
                 }
