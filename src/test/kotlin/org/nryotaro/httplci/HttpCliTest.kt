@@ -11,22 +11,14 @@ import io.netty.handler.codec.http.*
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslHandler
 import io.netty.handler.ssl.util.SelfSignedCertificate
-import io.netty.handler.stream.ChunkedNioFile
 import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.util.CharsetUtil
-import io.netty.util.concurrent.Future
-import io.netty.util.concurrent.FutureListener
 import org.hamcrest.CoreMatchers.`is`
-import org.junit.Assert
 import org.junit.Assert.assertThat
-import org.junit.Ignore
 import org.junit.Test
 import org.nryotaro.handler.CliHandler
 import org.nryotaro.httpcli.HttpCli
-import java.io.RandomAccessFile
 import java.net.InetSocketAddress
-import java.net.URI
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 
 /**
@@ -42,7 +34,7 @@ class HttpCliTest {
     fun getSuccessFully() {
 
         val server = TestServer()
-        val chan = server.start()
+        server.start()
 
         val cli = HttpCli()
 

@@ -147,7 +147,7 @@ class HttpCli(
                         }
                     }
                 })
-                // TODO GZIP
+                // TODO deflate
                 val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
                 request.headers().set(HttpHeaderNames.HOST, uri.host)
                 request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE)
@@ -158,77 +158,5 @@ class HttpCli(
             }
         })
 
-    }
-
-    @Deprecated("for reference")
-    fun retrieve(uri: URI, destFile: File) {
-        val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, 443))
-        val chf = pool.acquire()
-
-        var failed = false
-
-        chf.addListener(object: FutureListener<Channel> {
-
-            override fun operationComplete(future: Future<Channel>) {
-                if(future.isSuccess) {
-                    val channel = future.now
-                    val pipeline = channel.pipeline()
-                    val names = pipeline.names()
-                    if(!destFile.exists()) {
-                        destFile.parentFile.mkdirs()
-                    }
-                    if(destFile.exists()) {
-                        destFile.delete()
-                    }
-                    destFile.createNewFile()
-
-                    var dest: FileChannel = FileChannel.open(destFile.toPath(), StandardOpenOption.APPEND)
-                    println("open: " + destFile.toString())
-
-                    pipeline.addLast(object: SimpleChannelInboundHandler<HttpObject>(){
-                        override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
-
-                            if(msg is DefaultHttpResponse) {
-                                println("$uri: "+ msg.status())
-                            }
-                            if(msg is DefaultHttpContent) {
-                                if(!dest.isOpen && !failed) {
-                                    dest = FileChannel.open(destFile.toPath(), StandardOpenOption.WRITE,
-                                            StandardOpenOption.APPEND)
-                                }
-                                if(!failed) {
-                                    try {
-                                        dest.write(msg.content().nioBuffer())
-                                    } catch(e: Exception) {
-                                        println(e)
-                                    }
-                                }
-                            }
-                            if(msg is LastHttpContent) {
-                                pool.release(ctx.channel())
-                                println("close: " + destFile.toString())
-                                dest.close()
-                            }
-                        }
-                        override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-                            //super.exceptionCaught(ctx, cause)
-                            //ctx.close()
-                            failed = true
-                            cause.printStackTrace()
-                            dest.close()
-                            destFile.delete()
-                            pool.release(ctx.channel())
-                        }
-                    })
-                    //i++
-                    val request: HttpRequest = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.rawPath)
-                    request.headers().set(HttpHeaderNames.HOST, uri.host)
-                    request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE)
-                    // deflate
-                    request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP)
-                    channel.writeAndFlush(request)
-                }
-            }
-        })
     }
 }
