@@ -110,6 +110,7 @@ class HttpCli(
                 if(uri.scheme == "https" && pipeline.get(SSL) == null) {
                     pipeline.addFirst(SSL, buildSSlHandler(channel))
                 }
+
                 pipeline.addLast(READ_TIMEOUT, ReadTimeoutHandler(readTimeout.toMillis(), TimeUnit.MILLISECONDS))
                 pipeline.addLast(SPECIFIC, object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {

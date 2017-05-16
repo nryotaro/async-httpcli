@@ -24,6 +24,7 @@ import java.io.RandomAccessFile
 import java.net.InetSocketAddress
 import java.net.URI
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.CountDownLatch
 
 /**
  * TODO
@@ -42,21 +43,21 @@ class HttpCliTest {
 
         val cli = HttpCli()
 
-        cli.get("https://localhost:8443", createHandler())
-        Thread.sleep(10000)
-        cli.get("https://localhost:8443", createHandler())
+        val latch =  CountDownLatch(1)
+        cli.get("https://localhost:8443", createHandler(latch))
+        //Thread.sleep(10000)
+        //cli.get("https://localhost:8443", createHandler())
 
         chan.closeFuture().sync()
 
     }
 
-    fun createHandler(): CliHandler {
+    fun createHandler(latch: CountDownLatch): CliHandler {
         return object: CliHandler {
 
             var failed = false
             var cachedContent: ByteArray = ByteArray(0)
             override fun acceptHttpResponse(response: HttpResponse) {
-
                 failed = response.status() != HttpResponseStatus.OK
             }
 
@@ -101,20 +102,22 @@ class HttpCliTest {
 class TestServer {
     val bootstrap = ServerBootstrap()
     val group: EventLoopGroup = NioEventLoopGroup()
+
+    private val port = 8443
     init {
 
         val cert: SelfSignedCertificate = SelfSignedCertificate()
 
         val context: SslContext = SslContext.newServerContext(cert.certificate(), cert.privateKey())
 
-        bootstrap.group(group).channel(NioServerSocketChannel::class.java).localAddress(InetSocketAddress(8443))
+        bootstrap.group(group).channel(NioServerSocketChannel::class.java).localAddress(InetSocketAddress(port))
                 .childHandler(object: ChannelInitializer<SocketChannel>(){
                     override fun initChannel(channel: SocketChannel) {
                         val pipeline = channel.pipeline()
                         pipeline.addLast("ssl", context.newHandler(channel.alloc()));
                         pipeline.addLast("decoder", HttpRequestDecoder())
                         pipeline.addLast("encoder", HttpResponseEncoder())
-                        pipeline.addLast(ChunkedWriteHandler()) // order
+                        pipeline.addLast(ChunkedWriteHandler())
                         pipeline.addLast("simple", TestHandler())
                         pipeline.addLast("compressor", HttpContentCompressor())
                     }
@@ -124,9 +127,13 @@ class TestServer {
     fun start(): Channel {
         return bootstrap.bind().sync().channel()
     }
+
+    fun close() {
+        group.shutdownGracefully().sync()
+    }
 }
 
-// Simple extends Channel inboudn handler
+// Simple extends Channel inbound handler
 class TestHandler: SimpleChannelInboundHandler<HttpObject>() {
     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
 
@@ -159,6 +166,6 @@ class TestHandler: SimpleChannelInboundHandler<HttpObject>() {
     }
     override fun exceptionCaught(ctx: ChannelHandlerContext , cause: Throwable ){
         cause.printStackTrace()
-        println("errror")
+        println("error")
     }
 }
