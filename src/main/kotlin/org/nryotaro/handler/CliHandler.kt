@@ -17,5 +17,4 @@ interface CliHandler {
 
     fun  onException(ctx: ChannelHandlerContext, cause: Throwable)
 
-
 }

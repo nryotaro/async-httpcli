@@ -16,6 +16,9 @@ import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.util.CharsetUtil
 import io.netty.util.concurrent.Future
 import io.netty.util.concurrent.FutureListener
+import org.hamcrest.CoreMatchers.`is`
+import org.junit.Assert
+import org.junit.Assert.assertThat
 import org.junit.Ignore
 import org.junit.Test
 import org.nryotaro.handler.CliHandler
@@ -35,7 +38,7 @@ import java.util.concurrent.CountDownLatch
  */
 class HttpCliTest {
 
-    //@Test
+    @Test
     fun getSuccessFully() {
 
         val server = TestServer()
@@ -45,10 +48,8 @@ class HttpCliTest {
 
         val latch =  CountDownLatch(1)
         cli.get("https://localhost:8443", createHandler(latch))
-        //Thread.sleep(10000)
-        //cli.get("https://localhost:8443", createHandler())
-
-        chan.closeFuture().sync()
+        latch.await()
+        server.close()
 
     }
 
@@ -62,6 +63,13 @@ class HttpCliTest {
             }
 
             override fun acceptLastHttpContent(content: LastHttpContent) {
+                store(content)
+
+                assertThat(String(cachedContent),`is`("Netty rocks!"))
+                latch.countDown()
+            }
+
+            private fun store(content: HttpContent) {
                 if(failed) {
                     return
                 }
@@ -71,24 +79,13 @@ class HttpCliTest {
                 val array = ByteArray(length)
                 buf.getBytes(buf.readerIndex(), array)
                 cachedContent = byteArrayOf(*cachedContent, *array)
-
-                println(String(cachedContent))
             }
 
             override fun acceptContent(content: HttpContent) {
-                if(failed) {
-                    return
-                }
-
-                val buf = content.content()
-                val length = buf.readableBytes()
-                val array = ByteArray(length)
-                buf.getBytes(buf.readerIndex(), array)
-                cachedContent = byteArrayOf(*cachedContent, *array)
+                store(content)
             }
 
             override fun onFailure(cause: Throwable) {
-                println("failure")
                 cause.printStackTrace()
             }
 
