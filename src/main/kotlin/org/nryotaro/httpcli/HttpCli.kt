@@ -124,7 +124,7 @@ class HttpCli(
                      * invoked when ReadTimeoutException occurred
                      */
                     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-                        handler.onException(ctx, cause)
+                        handler.onException(cause)
                         ctx.close() //TODO required?
                         pool.release(ctx.channel())
                     }

@@ -81,7 +81,7 @@ class HttpCliTest {
                 cause.printStackTrace()
             }
 
-            override fun onException(ctx: ChannelHandlerContext, cause: Throwable) {
+            override fun onException(cause: Throwable) {
                 cause.printStackTrace()
             }
         }

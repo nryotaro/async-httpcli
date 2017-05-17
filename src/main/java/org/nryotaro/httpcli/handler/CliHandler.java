@@ -16,5 +16,5 @@ public interface CliHandler {
 
     void acceptLastHttpContent(LastHttpContent msg);
 
-    void onException(ChannelHandlerContext ctx , Throwable cause);
+    void onException(Throwable cause);
 }
