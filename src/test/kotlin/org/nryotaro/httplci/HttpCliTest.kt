@@ -16,8 +16,8 @@ import io.netty.util.CharsetUtil
 import org.hamcrest.CoreMatchers.`is`
 import org.junit.Assert.assertThat
 import org.junit.Test
-import org.nryotaro.handler.CliHandler
 import org.nryotaro.httpcli.HttpCli
+import org.nryotaro.httpcli.handler.CliHandler
 import java.net.InetSocketAddress
 import java.util.concurrent.CountDownLatch
 

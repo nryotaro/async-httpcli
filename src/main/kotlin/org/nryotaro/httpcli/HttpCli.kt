@@ -14,24 +14,18 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.util.concurrent.Future
 import io.netty.util.concurrent.FutureListener
-import org.nryotaro.handler.CliHandler
-import org.nryotaro.handler.SslExceptionHandler
-import java.io.File
 import java.net.InetSocketAddress
 import java.net.URI
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
 import java.time.Duration
+import org.nryotaro.httpcli.handler.SslExceptionHandler
+import org.nryotaro.httpcli.handler.CliHandler
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLEngine
 
 
 class HttpCli(
         private val handshakeTimeout: Duration = Duration.ofSeconds(10),
-        private val sslExceptionHandler: SslExceptionHandler= object: SslExceptionHandler{
-            override fun onHandshakeFailure(cause: Throwable) {
-                cause.printStackTrace()
-            } }) {
+        private val sslExceptionHandler: SslExceptionHandler= SslExceptionHandler { cause -> cause.printStackTrace() }) {
 
     private val SSL = "ssl"
     private val READ_TIMEOUT = "read_timeout"
@@ -115,11 +109,12 @@ class HttpCli(
                 pipeline.addLast(SPECIFIC, object: SimpleChannelInboundHandler<HttpObject>(){
                     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
                         when(msg) {
-                            is HttpResponse -> handler.acceptHttpResponse(msg)
                             is LastHttpContent -> {
                                 handler.acceptLastHttpContent(msg)
                                 pool.release(ctx.channel())
                             }
+                            is HttpResponse -> handler.acceptHttpResponse(msg)
+
                             is HttpContent -> handler.acceptContent(msg)
 
                         }

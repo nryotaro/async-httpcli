@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.nryotaro</groupId>
     <artifactId>async-httpcli</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2-SNAPSHOT</version>
     <description>Yet another async http client</description>
     <url>https://github.com/nryotaro/async-httpcli</url>
     <licenses>
@@ -30,7 +30,7 @@
             <id>nryotaro</id>
         </developer>
     </developers>
-    
+
     <properties>
         <kotlin.version>1.1.2-2</kotlin.version>
         <kotlin.compiler.incremental>true</kotlin.compiler.incremental>
