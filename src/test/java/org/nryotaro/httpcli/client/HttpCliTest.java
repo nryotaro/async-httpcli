@@ -14,14 +14,24 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.Future;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.nryotaro.httpcli.handler.CliHandler;
 
 import javax.net.ssl.SSLException;
+import javax.xml.ws.soap.Addressing;
+import java.io.File;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.cert.CertificateException;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -36,6 +46,111 @@ import static org.junit.Assert.fail;
  *  http
  */
 public class HttpCliTest {
+
+    @Ignore
+    @Test
+    public void fun() throws URISyntaxException, IOException, InterruptedException {
+
+        List<String> lines =  Files.readAllLines(new File(this.getClass().getResource("testindices.txt").toURI()).toPath());
+
+        Path temp = Files.createTempDirectory("foo");
+
+        HttpCli cli = new HttpCli();
+
+        for(String line: lines) {
+            String prefix = "https://www.sec.gov/";
+
+            String  a= line.substring(prefix.length());
+
+            File dest = new File(temp.toFile(), a);
+            dest.getParentFile().mkdirs();
+            FileChannel chan =  FileChannel.open(dest.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+
+            System.out.println(dest);
+
+
+            Thread.sleep(200);
+            cli.get(line, new CliHandler() {
+
+                @Override
+                public void onFailure(Throwable cause) {
+                    throw new RuntimeException("");
+                }
+
+                @Override
+                public void acceptHttpResponse(HttpResponse response) {
+
+                    if(response.status().code() != 200) {
+                        throw new RuntimeException("");
+                    }
+                }
+
+                private byte[] getBytes(ByteBuf buf) {
+                    if(buf.isDirect()) {
+                        int length = buf.readableBytes();
+                        byte[] array = new byte[length];
+                        buf.getBytes(buf.readerIndex(), array);
+                        return array;
+                    }
+                    byte[] array = buf.array();
+                    int offset = buf.arrayOffset() + buf.readerIndex();
+                    int length = buf.readableBytes();
+                    byte[] res = new byte[length];
+                    for(int i = 0;i<length;i++) {
+                         res[i] = array[i+offset];
+                    }
+                    return res;
+                }
+
+                @Override
+                public void acceptContent(HttpContent msg) {
+                    byte[] res =  getBytes(msg.content());
+
+                    ByteBuffer f = ByteBuffer.allocate(res.length);
+                    if (f.isReadOnly()) {
+                        f.flip();
+                    }
+                    f.put(res);
+
+                    f.flip();
+
+                    try {
+                        chan.write(f);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void acceptLastHttpContent(LastHttpContent msg) {
+                    byte[] res =  getBytes(msg.content());
+
+                    ByteBuffer f = ByteBuffer.allocate(res.length);
+                    f.put(res);
+
+                    f.flip();
+
+                    try {
+                        chan.write(f);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                    try {
+                        chan.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onException(Throwable cause) {
+                    throw new RuntimeException("");
+                }
+            });
+        }
+    }
+
     @Test
     public void getSuccessFully() throws SSLException, InterruptedException, CertificateException, URISyntaxException {
         TestServer server = new TestServer();
