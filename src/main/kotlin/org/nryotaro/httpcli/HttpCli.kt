@@ -89,6 +89,7 @@ class HttpCli(
             else -> uri.port
         }
     }
+
     fun get(url: String, handler: CliHandler, readTimeout: Duration = Duration.ofSeconds(10)) {
         val uri = URI(url)
         val pool: SimpleChannelPool = poolMap.get(InetSocketAddress(uri.host, port(uri)))
