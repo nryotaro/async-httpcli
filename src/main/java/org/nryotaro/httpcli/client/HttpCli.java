@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import static jdk.nashorn.internal.objects.Global.println;
 
-class HttpCli {
+public class HttpCli {
 
     private static String SSL = "ssl";
     private static String READ_TIMEOUT = "read_timeout";
